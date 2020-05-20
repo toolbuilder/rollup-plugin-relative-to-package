@@ -7,10 +7,6 @@ export default {
     format: 'es'
   },
   plugins: [
-    relativeToImport({
-      src: 'src',
-      packageName: '@toolbuilder/rollup-plugin-relative-to-import',
-      module: 'src/plugin.js'
-    })
+    relativeToImport()
   ]
 }

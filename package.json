@@ -11,14 +11,16 @@
   "scripts": {
     "build": "npm-run-all --serial test lint docs",
     "lint": "eslint src test",
-    "test": "tape -r esm \"test/*_test.js\""
+    "test": "tape -r esm \"test/*.test.js\""
   },
   "eslintConfig": {
     "extends": "@toolbuilder/eslint-config"
   },
   "dependencies": {
     "esm": "^3.2.25",
-    "pkg-dir": "^4.2.0"
+    "picomatch": "^2.2.2",
+    "pkg-dir": "^4.2.0",
+    "rollup": "^2.10.5"
   },
   "devDependencies": {
     "@toolbuilder/eslint-config": ">=0.1.2",

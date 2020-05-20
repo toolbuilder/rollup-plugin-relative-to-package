@@ -4,14 +4,13 @@ import pkgDir from 'pkg-dir'
 
 const defaults = {
   module: 'src/plugin.js',
-  packageDir: '/home/superuser/awesome/',
+  rootDir: '/home/superuser/awesome/',
   importer: '/home/superuser/awesome/test/plugin.test.js',
   packageName: '@superuser/awesome'
 }
 
-
 test('rollup-plugin-relative-to-import', async assert => {
-  const packageDir = await pkgDir()
+  const rootDir = await pkgDir()
 
   const testCases = [
     {
@@ -43,8 +42,8 @@ test('rollup-plugin-relative-to-import', async assert => {
       description: 'looks up packageDir from package when not provided',
       id: '../src/plugin',
       module: 'src/plugin.js',
-      // Leaving out packageDir as part of test
-      importer: `${packageDir}/test/plugin.test.js`,
+      // Leaving out rootDir as part of test
+      importer: `${rootDir}/test/plugin.test.js`,
       packageName: '@superuser/awesome',
       expected: { id: '@superuser/awesome', external: true }
     },
@@ -52,8 +51,8 @@ test('rollup-plugin-relative-to-import', async assert => {
       description: 'looks up module from package.json when not provided',
       id: '../src/plugin',
       // Leaving out module, which happens to be 'src/plugin.js' anyway
-      packageDir, // must be packageDir because it is used to find package.json
-      importer: `${packageDir}/test/plugin.test.js`,
+      rootDir, // must be rootDir because it is used to find package.json
+      importer: `${rootDir}/test/plugin.test.js`,
       packageName: '@superuser/awesome',
       expected: { id: '@superuser/awesome', external: true }
     },
@@ -61,8 +60,8 @@ test('rollup-plugin-relative-to-import', async assert => {
       description: 'looks up packageName from package.json when not provided',
       id: '../src/plugin',
       module: 'src/plugin.js',
-      packageDir, // must be packageDir because it is used to find package.json
-      importer: `${packageDir}/test/plugin.test.js`,
+      rootDir, // must be rootDir because it is used to find package.json
+      importer: `${rootDir}/test/plugin.test.js`,
       // Leaving out packageName
       expected: { id: 'rollup-plugin-relative-to-import', external: true }
     },

@@ -1,44 +1,79 @@
 import { promises } from 'fs'
-import { dirname, join, parse, relative, resolve } from 'path'
+import { dirname, join, relative, resolve } from 'path'
 import pkgDir from 'pkg-dir'
+import picomatch from 'picomatch'
 
-const removeExtension = (path) => {
-  const parts = parse(path)
-  return join(parts.root, parts.dir, parts.name)
+const getFirstModulePath = (mainFields, packageJson) => {
+  const paths = mainFields
+    .map(field => packageJson[field])
+    .filter(field => field != null)
+  return paths[0] // undefined is OK
+}
+
+const isModule = (id, module) => id === module
+const isPartOfModule = (id, moduleMatcher) => moduleMatcher(id)
+
+const tryWithExtensions = (id, extensions, fn) => {
+  const matches = extensions
+    .map(ext => fn(`${id}${ext}`))
+    .filter(match => match)
+  return matches.length > 0
 }
 
 export default (userOptions = {}) => {
-  const options = { ...userOptions }
-
+  const options = {
+    extensions: ['.mjs', '.js', '.json', '.node'], // Same as node-resolve
+    mainFields: ['browser', 'jsnext', 'module', 'main'], // Same as node-resolve
+    rootDir: undefined, // defaults to first path where package.json is found using pkg-dir
+    module: undefined, // defaults to first package.json field (from mainFields) that returns a value
+    modulePaths: undefined, // defaults to options.module
+    packageName: undefined, // will be read from package.json later if not provided
+    ...userOptions
+  }
+  let moduleMatcher // derived from modulePaths
   return {
     async buildStart () {
-      options.packageDir = options.packageDir || await pkgDir()
-      if (options.module == null || options.packageName == null) {
-        const packageJsonPath = join(options.packageDir, 'package.json')
+      // Build up default option values now (rather than in factory function) because async calls are required
+
+      options.rootDir = options.rootDir || await pkgDir()
+      const needPackageJson = options.modulePaths == null || options.packageName == null
+
+      if (needPackageJson) {
+        const packageJsonPath = join(options.rootDir, 'package.json')
         const packageJson = JSON.parse(await promises.readFile(packageJsonPath, 'utf-8'))
-        // packageJson.main can be entry point if you're using *.mjs files, and don't
-        // put an extension on the main property. Not checking all that.
-        options.module = options.module || packageJson.module || packageJson.main
+
+        options.module = getFirstModulePath(options.mainFields, packageJson)
+        options.modulePaths = options.modulePaths || options.module
         options.packageName = options.packageName || packageJson.name
-        console.log(options.module, options.packageName)
       }
-      options.module = removeExtension(options.module) // Remove extension, if present, to simplify resolveId
+      moduleMatcher = picomatch(options.modulePaths)
     },
 
     async resolveId (id, importer) {
-      if (importer == null) return null // id is the entry point in this case
+      // Test if id is entry point
+      if (importer == null) return null
 
-      const trimmedId = removeExtension(id) // Remove extension, if present, to simplify code.
-      if (!id.startsWith('.')) return { id: trimmedId, external: true } // id is an external package
+      // Test if id is external package like 'lodash' or 'zora'
+      if (!id.startsWith('.')) return { id, external: true }
 
-      if (id.startsWith('./')) return null // id is non-module helper, let rollup handle it
+      // id path is relative to importer. Need id path relative to rootDir
+      const idPath = resolve(dirname(importer), id) // this is absolute path of id
+      const relativeIdPath = relative(options.rootDir, idPath) // this is relative to packageDir
 
-      // Have id path relative to importer. Need path relative to packageDir
-      const idPath = resolve(dirname(importer), trimmedId) // this is absolute path of id
-      const relativeIdPath = relative(options.packageDir, idPath) // this is relative to packageDir
+      const extensions = [''].concat(options.extensions) // null extension in case id already has extension
 
-      if (relativeIdPath === options.module) return { id: options.packageName, external: true }
-      return { id: `${options.packageName}/${relativeIdPath}`, external: true }
+      // Test if id is the module itself
+      if (tryWithExtensions(relativeIdPath, extensions, (testId) => isModule(testId, options.module))) {
+        return { id: options.packageName, external: true }
+      }
+
+      // Test if id is part of the module that is being imported directly
+      if (tryWithExtensions(relativeIdPath, extensions, (testId) => isPartOfModule(testId, moduleMatcher))) {
+        return { id: `${options.packageName}/${relativeIdPath}`, external: true }
+      }
+
+      // id isn't handled by this plugin - let Rollup handle it from here
+      return null
     }
   }
 }
