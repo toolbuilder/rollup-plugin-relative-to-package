@@ -4,7 +4,7 @@
   "keywords": [],
   "license": "MIT",
   "main": "index.js",
-  "module": "src/index.js",
+  "module": "src/plugin.js",
   "files": [
     "src"
   ],
@@ -17,7 +17,8 @@
     "extends": "@toolbuilder/eslint-config"
   },
   "dependencies": {
-    "esm": "^3.2.25"
+    "esm": "^3.2.25",
+    "pkg-dir": "^4.2.0"
   },
   "devDependencies": {
     "@toolbuilder/eslint-config": ">=0.1.2",
