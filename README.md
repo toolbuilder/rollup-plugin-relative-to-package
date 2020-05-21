@@ -23,7 +23,7 @@ import { internalFunction } from 'your-package-name/src/inside-your-package'
 Using npm:
 
 ```bash
-npm install --save-dev rollup-relative-to-package
+npm install --save-dev rollup-plugin-relative-to-package
 ```
 
 ## Use
