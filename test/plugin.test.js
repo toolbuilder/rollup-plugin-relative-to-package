@@ -84,8 +84,8 @@ test('rollup-plugin-relative-to-import', async assert => {
   ]
 
   for (const testCase of testCases) {
-    const { description, id, module, packageDir, packageName, importer, expected } = testCase
-    const plugin = relativeToImport({ module, packageDir, packageName })
+    const { description, id, module, rootDir, packageName, importer, expected } = testCase
+    const plugin = relativeToImport({ module, rootDir, packageName })
     await plugin.buildStart({})
     const actual = await plugin.resolveId(id, importer)
     assert.deepEqual(actual, expected, description)

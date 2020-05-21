@@ -36,16 +36,16 @@ export default (userOptions = {}) => {
       // Build up default option values now (rather than in factory function) because async calls are required
 
       options.rootDir = options.rootDir || await pkgDir()
-      const needPackageJson = options.modulePaths == null || options.packageName == null
+      const needPackageJson = options.module == null || options.packageName == null
 
       if (needPackageJson) {
         const packageJsonPath = join(options.rootDir, 'package.json')
         const packageJson = JSON.parse(await promises.readFile(packageJsonPath, 'utf-8'))
 
         options.module = getFirstModulePath(options.mainFields, packageJson)
-        options.modulePaths = options.modulePaths || options.module
         options.packageName = options.packageName || packageJson.name
       }
+      options.modulePaths = options.modulePaths || options.module
       moduleMatcher = picomatch(options.modulePaths)
     },
 
