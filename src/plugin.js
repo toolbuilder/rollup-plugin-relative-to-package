@@ -42,11 +42,12 @@ export default (userOptions = {}) => {
         const packageJsonPath = join(options.rootDir, 'package.json')
         const packageJson = JSON.parse(await promises.readFile(packageJsonPath, 'utf-8'))
 
-        options.module = getFirstModulePath(options.mainFields, packageJson)
+        options.module = options.module || getFirstModulePath(options.mainFields, packageJson)
         options.packageName = options.packageName || packageJson.name
       }
       options.modulePaths = options.modulePaths || options.module
       moduleMatcher = picomatch(options.modulePaths)
+      return options // This is for testing - Rollup does not expect a return value
     },
 
     async resolveId (id, importer) {
@@ -69,6 +70,7 @@ export default (userOptions = {}) => {
 
       // Test if id is part of the module that is being imported directly
       if (tryWithExtensions(relativeIdPath, extensions, (testId) => isPartOfModule(testId, moduleMatcher))) {
+        // This will be a funny looking import on Windows, since it will have back slashes
         return { id: `${options.packageName}/${relativeIdPath}`, external: true }
       }
 
