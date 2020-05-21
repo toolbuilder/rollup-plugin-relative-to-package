@@ -1,7 +1,16 @@
 {
-  "name": "rollup-plugin-relative-to-import",
+  "name": "rollup-plugin-relative-to-package",
   "version": "0.1.0-rc0",
+  "description": "Converts unit tests using relative imports (e.g. '../src/module.js') to use package imports (e.g. '<package-name>', to support package testing.",
   "keywords": [],
+  "homepage": "https://github.com/toolbuilder/rollup-plugin-relative-to-package#readme",
+  "bugs": {
+    "url": "https://github.com/toolbuilder/rollup-plugin-relative-to-package/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/toolbuilder/rollup-plugin-relative-to-package.git"
+  },
   "license": "MIT",
   "main": "index.js",
   "module": "src/plugin.js",
