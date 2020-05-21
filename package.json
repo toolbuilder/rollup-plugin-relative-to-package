@@ -1,8 +1,15 @@
 {
   "name": "rollup-plugin-relative-to-package",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Converts unit tests using relative imports (e.g. '../src/module.js') to use package imports (e.g. '<package-name>', to support package testing.",
-  "keywords": [],
+  "keywords": [
+    "rollup",
+    "plugin",
+    "es2015",
+    "npm",
+    "modules",
+    "esm"
+  ],
   "homepage": "https://github.com/toolbuilder/rollup-plugin-relative-to-package#readme",
   "bugs": {
     "url": "https://github.com/toolbuilder/rollup-plugin-relative-to-package/issues"
