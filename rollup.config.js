@@ -3,10 +3,10 @@ import relativeToImport from './src/plugin.js'
 export default {
   input: 'test/plugin.test.js',
   output: {
-    file: 'bundle.js',
+    file: 'test-bundle.js',
     format: 'es'
   },
   plugins: [
-    relativeToImport()
+    relativeToImport() // Turns out that all defaults work here
   ]
 }

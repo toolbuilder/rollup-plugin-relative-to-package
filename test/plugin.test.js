@@ -1,48 +1,64 @@
-import { dirname, relative, resolve } from 'path'
+import { format } from 'date-fns'
+import fs from 'fs-extra'
+import { tmpdir } from 'os'
+import { dirname, join, relative, resolve } from 'path'
 import { test } from 'zora'
 import relativeToImport from '../src/plugin'
+import testPackageJson from './make-package-json'
+
+// Build a fake package in a temporary directory. The only file required is package.json
+const setupFakePackage = async () => {
+  const timePart = format(Date.now(), 'yyyy-MM-dd-kk-mm-ss')
+  const tempPath = join(tmpdir(), `relative-to-import-${timePart}`)
+  await fs.ensureDir(tempPath)
+  await fs.writeJSON(join(tempPath, 'package.json'), testPackageJson, { spaces: 2 })
+  return tempPath
+}
 
 test('option handling', async assert => {
-// These are the only tests that touch the file system
+  // Setup fake package for the two tests that read from package.json
+  const tempPath = await setupFakePackage()
+  console.log(tempPath)
+
   const optionTestCases = [
     {
-      description: 'look up rootDir by finding nearest package.json', // Which is root of this plugin package
-      input: { rootDir: undefined },
+      description: 'look up rootDir by finding nearest package.json',
+      options: { rootDir: undefined },
       expected: { rootDir: process.cwd() }
     },
     {
-      description: 'look up module in package.json, and select first available field',
-      input: { module: undefined, rootDir: process.cwd() },
-      expected: { module: 'src/plugin.js', rootDir: process.cwd() } // copied from package.json
-    },
-    {
       description: 'use module as modulePaths',
-      input: { modulePaths: undefined },
-      expected: { modulePaths: 'index.js' } // from defaultOptions
+      options: { modulePaths: undefined, module: 'source/fancy-module.js' },
+      expected: { modulePaths: 'source/fancy-module.js', module: 'source/fancy-module.js' }
     },
-    {
+    { // Reads from package.json
+      description: 'look up module in package.json, and select first available field',
+      options: { module: undefined, rootDir: tempPath },
+      expected: { module: testPackageJson.module, rootDir: tempPath }
+    },
+    { // Reads from package.json
       description: 'lookup packageName from package.json',
-      input: { packageName: undefined, rootDir: process.cwd() },
-      expected: { packageName: 'rollup-plugin-relative-to-import', rootDir: process.cwd() }
+      options: { packageName: undefined, rootDir: tempPath },
+      expected: { packageName: testPackageJson.name, rootDir: tempPath }
     }
   ]
 
-  // Specify every possible option to ensure there are no unintended changes
-  const defaultOptions = {
-    extensions: ['*.js', '*.mjs'],
-    mainFields: ['module'],
-    rootDir: '/home/awesome/package',
-    module: 'index.js',
-    modulePaths: ['src/**/*.js'],
-    packageName: 'double-super-awesome'
-  }
-
   for (const testCase of optionTestCases) {
-    const input = { ...defaultOptions, ...testCase.input }
+    // Override default of every possible option to ensure there are no unintended changes
+    const defaultOptions = {
+      extensions: ['*.js', '*.mjs'],
+      mainFields: ['module'],
+      rootDir: '/home/awesome/package',
+      module: 'index.js',
+      modulePaths: ['src/**/*.js'],
+      packageName: 'double-super-awesome'
+    }
+
+    const options = { ...defaultOptions, ...testCase.options }
     const expected = { ...defaultOptions, ...testCase.expected }
 
-    const plugin = relativeToImport(input)
-    // Rollup expects buildStart to return null.
+    const plugin = relativeToImport(options)
+    // Rollup ignores return value of buildStart
     // Taking advantage of that to access the initialized options for testing
     const actual = await plugin.buildStart({})
     assert.deepEqual(actual, expected, testCase.description)
@@ -50,11 +66,21 @@ test('option handling', async assert => {
 })
 
 /*
-  Specify different package structures, and what the imports would look like in each.
-  Treat each module structure as a separate test.
-  Then for each module structure, run through the import possibilities
+  Overall testing strategy:
+
+  Id resolution for this plugin happens in the context of a specific directory structure. Therefore,
+  each id resolution test case must be tested with each possible kind of directory structure.
+
+  To do this, directory structure test cases are specified separately from id resolution test cases.
+  Then all the possible combinations of those test cases are generated and run.
+
+  Each test case only specifies what it cares about, and the plugin uses default values for the rest
+  of the input parameters.
+
+  The id resolution test cases are defined by idResolutionTestCases.
+
 */
-const moduleStructure = [
+const directoryStructureTestCases = [
   {
     description: 'module is a single file',
     entryPoint: 'test/index.test.js', // test module location relative to package root
@@ -135,21 +161,29 @@ const moduleStructure = [
   }
 ]
 
-moduleStructure
+directoryStructureTestCases
   .forEach(structure => {
     const { options, imports, entryPoint } = structure
-    const pluginOptions = {
+
+    // This is the options Object that will be used to initialize the plugin.
+    // Id resolution test cases are defined in terms of this Object.
+    const structureOptions = {
       rootDir: '/home/awesome/package',
       packageName: 'double-super-awesome',
-      ...options
+      ...options // may override default values
     }
-    const importer = `${pluginOptions.rootDir}/${entryPoint}` // Not used in one test case
-    const testCases = [
+
+    // Importer parameter to plugin.resolveId can be null for a test case, so each test case
+    // has to choose the value it wants. // This is the value used in the common case
+    const importer = `${structureOptions.rootDir}/${entryPoint}`
+
+    // Define the id resolution test cases in terms of structureOptions
+    const idResolutionTestCases = [
       {
         description: 'handles external packages',
-        id: 'zora',
-        importer,
-        expected: { id: 'zora', external: true }
+        id: 'zora', // id provided to plugin.resolveId
+        importer, // importer provided to plugin.resolveId
+        expected: { id: 'zora', external: true } // expected output from plugin
       },
       {
         description: 'id is entry point',
@@ -161,16 +195,16 @@ moduleStructure
         description: 'module import without extension',
         id: imports.module,
         importer,
-        expected: { id: pluginOptions.packageName, external: true }
+        expected: { id: structureOptions.packageName, external: true }
       },
       {
         description: 'module import with extension',
         id: `${imports.module}.js`,
         importer,
-        expected: { id: pluginOptions.packageName, external: true }
+        expected: { id: structureOptions.packageName, external: true }
       },
       {
-        description: 'test helper file import',
+        description: 'helper file import',
         id: imports.helper,
         importer,
         expected: null
@@ -180,21 +214,20 @@ moduleStructure
 
     if (imports.direct) {
       const idPath = resolve(dirname(importer), imports.direct) // this is absolute path of id
-      const relativeIdPath = relative(pluginOptions.rootDir, idPath) // this is relative to packageDir
+      const relativeIdPath = relative(structureOptions.rootDir, idPath) // this is relative to packageDir
       const testCase = {
         description: 'direct import of file within module',
         id: imports.direct,
         importer,
-        expected: { id: `${pluginOptions.packageName}/${relativeIdPath}`, external: true }
+        expected: { id: `${structureOptions.packageName}/${relativeIdPath}`, external: true }
       }
-      testCases.push(testCase)
+      idResolutionTestCases.push(testCase)
     }
 
     test(structure.description, async assert => {
-      for (const testCase of testCases) {
+      for (const testCase of idResolutionTestCases) {
         const { description, id, importer, expected } = testCase
-        const options = { ...pluginOptions }
-        const plugin = relativeToImport(options)
+        const plugin = relativeToImport(structureOptions)
         await plugin.buildStart(/* plugin does not use inputOptions */)
         const actual = await plugin.resolveId(id, importer)
         assert.deepEqual(actual, expected, description)

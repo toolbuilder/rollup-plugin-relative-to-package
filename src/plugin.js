@@ -1,8 +1,10 @@
 import { promises } from 'fs'
 import { dirname, join, relative, resolve } from 'path'
-import pkgDir from 'pkg-dir'
 import picomatch from 'picomatch'
+import pkgDir from 'pkg-dir'
 
+// Look for a field in package.json with the ES module path of the package
+// First match wins
 const getFirstModulePath = (mainFields, packageJson) => {
   const paths = mainFields
     .map(field => packageJson[field])
@@ -13,8 +15,9 @@ const getFirstModulePath = (mainFields, packageJson) => {
 const isModule = (id, module) => id === module
 const isPartOfModule = (id, moduleMatcher) => moduleMatcher(id)
 
-const tryWithExtensions = (id, extensions, fn) => {
-  const matches = extensions
+// Try id with each extension to see if fn matches one
+const matchWithExtensions = (id, extensions, fn) => {
+  const matches = extensions // yes, this could be a lot more efficient
     .map(ext => fn(`${id}${ext}`))
     .filter(match => match)
   return matches.length > 0
@@ -30,7 +33,7 @@ export default (userOptions = {}) => {
     packageName: undefined, // will be read from package.json later if not provided
     ...userOptions
   }
-  let moduleMatcher // derived from modulePaths
+  let moduleMatcher // derived from modulePaths, used to determine whether an id is part of the package module
   return {
     async buildStart () {
       // Build up default option values now (rather than in factory function) because async calls are required
@@ -57,20 +60,20 @@ export default (userOptions = {}) => {
       // Test if id is external package like 'lodash' or 'zora'
       if (!id.startsWith('.')) return { id, external: true }
 
-      // id path is relative to importer. Need id path relative to rootDir
+      // Now we know id path is relative to importer. Need id path relative to rootDir
       const idPath = resolve(dirname(importer), id) // this is absolute path of id
       const relativeIdPath = relative(options.rootDir, idPath) // this is relative to packageDir
 
-      const extensions = [''].concat(options.extensions) // null extension in case id already has extension
+      const extensions = [''].concat(options.extensions) // add null extension in case id already has extension
 
       // Test if id is the module itself
-      if (tryWithExtensions(relativeIdPath, extensions, (testId) => isModule(testId, options.module))) {
+      if (matchWithExtensions(relativeIdPath, extensions, (testId) => isModule(testId, options.module))) {
         return { id: options.packageName, external: true }
       }
 
       // Test if id is part of the module that is being imported directly
-      if (tryWithExtensions(relativeIdPath, extensions, (testId) => isPartOfModule(testId, moduleMatcher))) {
-        // This will be a funny looking import on Windows, since it will have back slashes
+      if (matchWithExtensions(relativeIdPath, extensions, (testId) => isPartOfModule(testId, moduleMatcher))) {
+        // This will be a funny looking import on Windows, since it will have back slashes too
         return { id: `${options.packageName}/${relativeIdPath}`, external: true }
       }
 
