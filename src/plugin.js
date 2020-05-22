@@ -35,6 +35,7 @@ export default (userOptions = {}) => {
   }
   let moduleMatcher // derived from modulePaths, used to determine whether an id is part of the package module
   return {
+    name: 'relative-to-package',
     async buildStart () {
       // Build up default option values now (rather than in factory function) because async calls are required
 
