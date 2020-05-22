@@ -37,8 +37,8 @@ export default {
   // This is the entry point to your unit test - not your package!
   // I use the 'multi-entry' plugin to process all unit tests at once.
   input: 'test/unit-test.js',
-  // relativeToPackage dynamically adds to the 'external' Array
-  // during bundle generation, so there is no need to specify it.
+  // relativeToPackage determines which packages are external, and
+  // gives that information to Rollup. So there is no need to specify it.
   // external: []
   output: {
     dir: 'output',
@@ -55,7 +55,7 @@ export default {
 
 Then call [Rollup](https://rollupjs.org/guide/en/) however you wish.
 
-This plugin dynamically adds to the [Rollup](https://rollupjs.org/guide/en/) `external` input option as it finds modules that are external to your module. For example, this plugin will detect `import _ from 'lodash'` as an external import.
+This plugin dynamically determines which packages are external, and tells [Rollup](https://rollupjs.org/guide/en/). For example, this plugin will detect `import _ from 'lodash'` as an external import. There is no need to set the Rollup `external` input option.
 
 The Rollup configuration in the root of this package repository uses this plugin to generate a unit test that imports the package.
 
