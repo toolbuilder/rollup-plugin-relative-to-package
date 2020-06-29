@@ -18,7 +18,6 @@ const setupFakePackage = async () => {
 test('option handling', async assert => {
   // Setup fake package for the two tests that read from package.json
   const tempPath = await setupFakePackage()
-  console.log(tempPath)
 
   const optionTestCases = [
     {
