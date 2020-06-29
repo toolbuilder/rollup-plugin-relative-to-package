@@ -17,10 +17,10 @@ const isPartOfModule = (id, moduleMatcher) => moduleMatcher(id)
 
 // Try id with each extension to see if fn matches one
 const matchWithExtensions = (id, extensions, fn) => {
-  const matches = extensions // yes, this could be a lot more efficient
-    .map(ext => fn(`${id}${ext}`))
-    .filter(match => match)
-  return matches.length > 0
+  for (const extension of extensions) {
+    if (fn(`${id}${extension}`)) return true
+  }
+  return false
 }
 
 export default (userOptions = {}) => {
@@ -63,7 +63,7 @@ export default (userOptions = {}) => {
 
       // Now we know id path is relative to importer. Need id path relative to rootDir
       const idPath = resolve(dirname(importer), id) // this is absolute path of id
-      const relativeIdPath = relative(options.rootDir, idPath) // this is relative to packageDir
+      const relativeIdPath = relative(options.rootDir, idPath) // this is relative to rootDir
 
       const extensions = [''].concat(options.extensions) // add null extension in case id already has extension
 
