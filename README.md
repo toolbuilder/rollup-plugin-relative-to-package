@@ -1,6 +1,6 @@
 # Rollup-Plugin-Relative-To-Package
 
-Converts unit tests that use relative imports to use package imports. This is helpful to test the package as a whole when you write code using ES modules, but don't generate CommonJS code. This is the case when you use [esm](https://github.com/standard-things/esm) to load ES modules directly. This plugin is an example of that.
+Converts unit tests that use relative imports to use package imports. This is helpful to test the package as a whole when you write code using ES modules, but don't generate CommonJS code. This is the case when you use [esm](https://github.com/standard-things/esm) to load ES modules directly.
 
 For example the unit test:
 
@@ -57,11 +57,19 @@ Then call [Rollup](https://rollupjs.org/guide/en/) however you wish.
 
 This plugin dynamically determines which packages are external, and tells [Rollup](https://rollupjs.org/guide/en/). For example, this plugin will detect `import _ from 'lodash'` as an external import. There is no need to set the Rollup `external` input option.
 
-The Rollup configuration in the root of this package repository uses this plugin to generate a unit test that imports the package.
+This [example Rollup configuration](./rollup.config.js) in the root of this repository uses this plugin to generate a unit test that imports the package. Here's how to run it:
 
 ```bash
 pnpm install # I use pnpm. You can use npm and npx if you like
 pnpx rollup -c rollup.config.js # will produce test-bundle.js
+```
+
+The `check:packfile` script in [package.json](./package.json) uses this plugin. The configuration file for `check:packfile` is [rollup.test.config.js](./rollup.test.config.js). It requires [pnpm](https://pnpm.js.org/). Run the script like this:
+
+```bash
+# PNPM must be installed
+pnpm install
+pnpm run check:packfile
 ```
 
 ## Options
