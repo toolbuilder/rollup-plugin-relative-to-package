@@ -1,4 +1,5 @@
 node_modules/
+cjs/plugin.js
 *.tgz
 test-bundle.js
 published

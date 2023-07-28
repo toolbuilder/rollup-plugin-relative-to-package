@@ -1,0 +1,5 @@
+{
+    "type": "commonjs",
+    "description": "The files in this directory are commonjs, so make this directory a commonjs module"
+}
+  

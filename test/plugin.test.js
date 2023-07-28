@@ -3,8 +3,8 @@ import fs from 'fs-extra'
 import { tmpdir } from 'os'
 import { dirname, join, relative, resolve } from 'path'
 import { test } from 'zora'
-import relativeToImport from '../src/plugin'
-import testPackageJson from './make-package-json'
+import relativeToImport from 'rollup-plugin-relative-to-package'
+import testPackageJson from './make-package-json.js'
 
 // Build a fake package in a temporary directory. The only file required is package.json
 const setupFakePackage = async () => {
