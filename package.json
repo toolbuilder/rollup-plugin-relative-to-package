@@ -1,6 +1,6 @@
 {
   "name": "rollup-plugin-relative-to-package",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Converts unit tests using relative imports (e.g. '../src/module.js') to use package imports (e.g. '<package-name>', to support package testing.",
   "keywords": [
     "rollup",
