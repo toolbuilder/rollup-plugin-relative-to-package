@@ -1,16 +1,18 @@
 # Rollup-Plugin-Relative-To-Package
 
-Converts unit tests that use relative imports to use package imports. This is helpful to test the package as a whole when you write code using ES modules, but don't generate CommonJS code. This is the case when you use [esm](https://github.com/standard-things/esm) to load ES modules directly.
+Converts unit tests that use relative imports to use package imports. Along the way, it calculates which files are `external` from Rollup's perspective. Therefore, the `external` field is not required in your configuration.
 
-For example the unit test:
+NOTE: Since Node v13.6.0 and v12.16.0, Node supports 'self-referencing', where a module (e.g. a unit test), can import the package module using the package name instead of relative imports. In most (all?) cases, you should be using that feature instead of this plugin. This plugin only processes relative imports. Therefore, if you are using self-referencing imports, this plugin will not affect your Rollup builds.
+
+Here is what the plugin does. Given a unit test that uses relative imports:
 
 ```javascript
-import YourPackage from '../src/your-package-module'
-import { internalFunction } from '../src/inside-your-package'
+import YourPackage from '../src/your-package-module.js'
+import { internalFunction } from '../src/inside-your-package.js'
 /* Unit test code goes here */
 ```
 
-Would be converted to:
+Convert it to look like this:
 
 ```javascript
 import YourPackage from 'your-package-name'
@@ -25,6 +27,16 @@ Using npm:
 ```bash
 npm install --save-dev rollup-plugin-relative-to-package
 ```
+
+## Upgrading To 1.0.0
+
+Version 1.0.0 makes breaking changes to this plugin.
+
+Options `extensions`, `module`, `mainFields`, and `modulePaths` are no longer supported. In their place are the `exports` and `conditions` fields. The `exports` field is the same as the `package.json` `exports` field, and `conditions` specifies what subPaths are valid.
+
+The simplest way to upgrade is to add an `exports` field in your `package.json`, and remove the existing options from your Rollup configuration. You may need to add the `conditions` field if you use special export conditions.
+
+The plugin is now a `dual module` so you can use it from CommonJS and ECMAScript modules.
 
 ## Use
 
@@ -45,10 +57,10 @@ export default {
     format: 'es'
   },
   plugins: [
-    relativeToPackage(
-      // Tell the plugin which files are part of the package...
-      modulePaths: 'src/**/*.js'
-    )
+    // usually, the default values should work just fine
+    relativeToPackage({
+      conditions: ['default', 'node', 'import', 'production']
+    })
   ]
 }
 ```
@@ -64,60 +76,36 @@ pnpm install # I use pnpm. You can use npm and npx if you like
 pnpx rollup -c rollup.config.js # will produce test-bundle.js
 ```
 
-The `check:packfile` script in [package.json](./package.json) uses this plugin. The configuration file for `check:packfile` is [rollup.test.config.js](./rollup.test.config.js). It requires [pnpm](https://pnpm.js.org/). Run the script like this:
+The `check:packfile` script in [package.json](./package.json) uses this plugin to test the package. The configuration file for `check:packfile` is [rollup.test.config.js](./rollup.test.config.js). It requires [pnpm](https://pnpm.js.org/). Run the script like this:
 
 ```bash
 # PNPM must be installed
 pnpm install
+pnpm run build
 pnpm run check:packfile
 ```
 
 ## Options
 
-The plugin works without options. It will look at the closest `package.json` file to figure out values for the `module` and `packageName` options. Those values are probably fine, but you will probably want to set the `modulePaths` option to get the behavior you want.
+The plugin works without options. It will look at the closest `package.json` file to determine the `packageName` and `exports` option values. It is possible that you'll want to provide the `conditions` option if the default values are not sufficient.
 
-### extensions
-
-* Type: `Array[...String]`
-* Default: `['.mjs', '.js', '.json', '.node']`
-
-Frequently, import ids to not specify the file extension. For example, `import someIdentifier from '../src/module'`, does not specify the file extension. However, the `module` and `modulePaths` options **do** specify file extensions. This leaves the plugin uncertain about whether an import id (e.g. `../src/module`) references part of the package or not. The plugin first tries for a match without adding an extension in case you did specify an extension (e.g. `../src/module.js`). After that, it will append each of the extensions provided by this option to see if there is a match with `modulePaths`. If there is a match, then it will convert the relative import to a package import.
-
-### mainFields
+### conditions
 
 * Type: `Array[...String]`
-* Default: `['browser', 'jsnext', 'module', 'main']`
+* Default: `['default', 'import', 'node', 'node-addons']`
 
-When the plugin looks for the default `module` option value, it will look for these fields in `package.json`. Each field is tried until a match is found. The fields are tried in the order specified.
+This option completely replaces the default conditions - it does not append to the default conditions. Therefore include all the conditions you need.
 
-This plugin does not support Node's experimental [logic](https://nodejs.org/api/esm.html#esm_enabling) for specifying module entry points.
+The Node [documentation](https://nodejs.org/dist/latest-v14.x/docs/api/packages.html#packages_conditional_exports) describes conditional exports. This option provides the conditions that this plugin will use to resolve the module specifier when it encounters a relative path.
 
-### module
+### exports
 
-* Type: `String`
-* Default: `read from nearest package.json`
+* Type: `Object`
+* Default: by default exports is loaded from the nearest `package.json`
 
-This value is the module entry point you would specify if you were building your **module** with [Rollup](https://rollupjs.org/guide/en/). Because you are using this module, we can assume you are not building the module itself, but instead are building unit tests for package testing. In this case, the Rollup option `input` will not provide the correct entry point.
+Use this option if the `exports` field in your `package.json` is not suitable for some reason. The `exports` field is documented in the Node [documentation](https://nodejs.org/dist/latest-v14.x/docs/api/packages.html#packages_package_entry_points).
 
-The default module entry point is determined by looking in `package.json` as specified by the `mainFields` option. The search for `package.json` is controlled by the `rootDir` option.
-
-### modulePaths
-
-* Type: `String|Array[...String]
-* Default: `the value of the 'module' option`
-
-By default, this option takes on the value of the `module` option. This default value implies that the only file in your package is the module file itself. If that isn't true, you'll need to set this option.
-
-This plugin does not compile your module, so it doesn't know what files are part of your module, and what are used for other purposes. This option tells the plugin which files belong to your module, so it knows when to convert a relative import to a package import.
-
-The `modulePaths` parameters are file match globs that are fed directly to [picomatch](https://github.com/micromatch/picomatch). The `extensions` option documentation describes the match process.
-
-Example `modulePaths` values:
-
-* `'src/index.js'` - the only file in your module is 'src/index.js'.
-* `['src/**/*.js']` - your module only contains JavaScript, and all the module source is in the 'src' directory.
-* `['src/**/*.js', 'assets/**/*.json']` - your module source is in 'src', and you have 'json' assets in the 'assets' directory too.
-* `['index.js', 'helper-code.js']` - your module consists of two files in the package root: 'index.js' and 'helper-code.js'.
+NOTE: This plugin uses the `exports` field in reverse. It uses a module URI (e.g. filepath) to lookup the associated subPath and then generate the import module specifier. That means that this plugin implemented the `exports` field evaluation process, and there might be bugs - please report them. This plugin exports a class `ExportsResolver` that implements forward and backward lookup if that helps.
 
 ### packageName
 
@@ -133,7 +121,7 @@ The default `packageName` is determined by looking at the `name` field of `packa
 * Type: `String`
 * Default: `process.cwd()`
 
-If you do not specify the `module` or `packageName` options, this plugin needs to look at `package.json` to figure out the right values. It will start looking for `package.json` at the `rootDir` value, and continue up the directory structure until it finds one, or stops at the file system boundary. If your `package.json` is somewhere else, set this option.
+If you do not specify the `exports` or `packageName` options, this plugin needs to look at `package.json` to figure out the right values. It will start looking for `package.json` at the `rootDir` value, and continue up the directory structure until it finds one, or stops at the file system boundary. If your `package.json` is somewhere else, set this option.
 
 ## Alternatives
 

@@ -1,3 +1,7 @@
+/*
+  This is the test package.json for 'plugin.test.js' tests
+  that read the filesystem. It really only needs the name and exports field
+*/
 export default {
   name: '@super-scope/awesome-package',
   version: '0.1.0-rc0',
@@ -5,6 +9,10 @@ export default {
   license: 'MIT',
   main: 'index.js',
   module: 'src/index.js',
+  exports: {
+    require: './index.js',
+    default: './src/index.js'
+  },
   files: [
     'src'
   ],

@@ -1,7 +1,7 @@
 import { format } from 'date-fns'
 import fs from 'fs-extra'
 import { tmpdir } from 'os'
-import { dirname, join, relative, resolve } from 'path'
+import { join } from 'path'
 import { test } from 'zora'
 import relativeToImport from 'rollup-plugin-relative-to-package'
 import testPackageJson from './make-package-json.js'
@@ -15,41 +15,43 @@ const setupFakePackage = async () => {
   return tempPath
 }
 
-test('option handling', async assert => {
+test('option handling for options that may require disk access', async assert => {
   // Setup fake package for the two tests that read from package.json
   const tempPath = await setupFakePackage()
 
+  // The test overrides all options for each test case
+  // Therefore we only need to check default option values and
+  // file system lookups in these test cases.
+  //
+  // Check the default option value by setting that option to undefined in options field
+  // Check the expected default option value by setting that field to expected value in expected
+  // Note: this doesn't work for the 'conditions' option because it is never read from the filesystem
   const optionTestCases = [
     {
       description: 'look up rootDir by finding nearest package.json',
       options: { rootDir: undefined },
       expected: { rootDir: process.cwd() }
     },
-    {
-      description: 'use module as modulePaths',
-      options: { modulePaths: undefined, module: 'source/fancy-module.js' },
-      expected: { modulePaths: 'source/fancy-module.js', module: 'source/fancy-module.js' }
-    },
-    { // Reads from package.json
-      description: 'look up module in package.json, and select first available field',
-      options: { module: undefined, rootDir: tempPath },
-      expected: { module: testPackageJson.module, rootDir: tempPath }
-    },
     { // Reads from package.json
       description: 'lookup packageName from package.json',
       options: { packageName: undefined, rootDir: tempPath },
       expected: { packageName: testPackageJson.name, rootDir: tempPath }
+    },
+    { // Reads from package.json
+      description: 'lookup exports field from package.json',
+      options: { exports: undefined, rootDir: tempPath },
+      expected: { exports: testPackageJson.exports, rootDir: tempPath }
     }
+
   ]
 
   for (const testCase of optionTestCases) {
-    // Override default of every possible option to ensure there are no unintended changes
+    // Override default of every possible option to ensure there are no
+    // unintended changes caused by evaluating the test case
     const defaultOptions = {
-      extensions: ['*.js', '*.mjs'],
-      mainFields: ['module'],
       rootDir: '/home/awesome/package',
-      module: 'index.js',
-      modulePaths: ['src/**/*.js'],
+      conditions: ['apple', 'orange', 'unused'],
+      exports: './index.js',
       packageName: 'double-super-awesome'
     }
 
@@ -64,6 +66,26 @@ test('option handling', async assert => {
   }
 })
 
+// options.conditions overrides were already tested above
+test('options.conditions defaults', async assert => {
+  // setup options so plugin does not access filesystem
+  // conditions not specified here - default value is what we're testing
+  const defaultOptions = {
+    rootDir: '/home/awesome/package',
+    exports: './index.js',
+    packageName: 'double-super-awesome'
+  }
+  const defaultConditionsSet = ['default', 'import', 'node', 'node-addons']
+
+  const plugin = relativeToImport(defaultOptions)
+  // Rollup ignores return value of buildStart
+  // Taking advantage of that to access the initialized options for testing
+  const { conditions } = await plugin.buildStart({})
+  const actual = new Set(conditions) // conditions order does not matter
+  const expected = new Set(defaultConditionsSet)
+  assert.deepEqual(actual, expected, "default conditions match node defaults for type == 'module'")
+})
+
 /*
   Overall testing strategy:
 
@@ -73,7 +95,7 @@ test('option handling', async assert => {
   To do this, directory structure test cases are specified separately from id resolution test cases.
   Then all the possible combinations of those test cases are generated and run.
 
-  Each test case only specifies what it cares about, and the plugin uses default values for the rest
+  Each test case only specifies what it cares about, and the test uses default values for the rest
   of the input parameters.
 
   The id resolution test cases are defined by idResolutionTestCases.
@@ -81,88 +103,121 @@ test('option handling', async assert => {
 */
 const directoryStructureTestCases = [
   {
+    // test description for zora
     description: 'module is a single file',
-    entryPoint: 'test/index.test.js', // test module location relative to package root
-    options: { // Options required to tell the plugin about the test structure
-      module: 'src/index.js'
+    // unit test module location relative to package root
+    entryPoint: 'test/index.test.js',
+    // plugin options parameter. The packageName and rootDir will be added into this by the
+    // test so that the test does not access the filesystem.
+    options: {
+      exports: './src/index.js' // equivalent to { default: { '.': './src/index.js' }}
+      // if you provide packageName, it will override the test's choice, which is ok
     },
-    imports: { // Imports as they would look in the entryPoint
-      module: '../src/index', // relative import path to module from test
-      helper: './helper' // relative import path to helper from test
+    // create up to three test cases:
+    // * module - the default module entry point
+    // * direct - imports something other than the default module entry point
+    // * helper - an import that the unit test uses that is not part of the package
+    cases: {
+      // Array specifies unit test's import specifier, and the matching exports subpath
+      // with * replaced approriately if necessary.
+      module: ['../src/index.js', '.'], // package entry point and subPath
+      helper: ['./helper.js', null] // unit test helper, not exported by package
     }
   },
   {
     description: 'module is multiple files in package root',
     entryPoint: 'index.test.js',
     options: {
-      module: 'index.js',
-      modulePaths: ['index.js', 'module-import.js'], // needed for imports.direct
+      exports: {
+        '.': './index.js',
+        './extra': './module-import.js'
+      },
       packageName: '@myscope/super-awesome' // Just to test scoped package names
     },
-    imports: {
-      module: './index',
-      direct: './module-import', // importing a file that is part of the module directly
-      helper: './helper'
+    cases: {
+      module: ['./index.js', '.'],
+      direct: ['./module-import.js', './extra'],
+      helper: ['./helper.js', null]
     }
   },
   {
-    description: 'module is multiple files in a single directory',
+    description: 'module is multiple files in a single subdirectory',
     entryPoint: 'test/index.test.js',
     options: {
-      module: 'src/index.js',
-      modulePaths: ['src/**/*.js']
+      exports: {
+        node: {
+          '.': './src/index.js',
+          './src/*': './src/*.js'
+        }
+      }
     },
-    imports: {
-      module: '../src/index',
-      direct: '../src/part-of-package',
-      helper: './helper'
+    cases: {
+      module: ['../src/index.js', '.'],
+      direct: ['../src/part-of-package.js', './src/part-of-package'],
+      helper: ['./helper.js', null]
+    }
+  },
+  {
+    description: 'conditions in option parameter replace default option set',
+    entryPoint: 'test/index.test.js',
+    options: {
+      // test that conditions specified in options are used
+      conditions: ['default', 'browser'], // browser is not part of the default set
+      exports: {
+        node: { // node is part of default set, but has been replaced
+          './wrong': './src/index.js'
+        },
+        browser: {
+          '.': './src/index.js',
+          './src/*': './src/*.js'
+        }
+      }
+    },
+    cases: {
+      module: ['../src/index.js', '.'],
+      direct: ['../src/part-of-package.js', './src/part-of-package'],
+      helper: ['./helper.js', null]
     }
   },
   {
     description: 'module is split across multiple directories',
     entryPoint: 'test/index.test.js',
     options: {
-      module: 'src/index.js',
-      modulePaths: ['src/**/*.js', 'assets/**/*.json']
+      exports: {
+        import: {
+          '.': './src/index.js',
+          './special': './assets/special/data.js'
+        }
+      }
     },
-    imports: {
-      module: '../src/index',
-      direct: '../assets/special/data.json',
-      helper: '../helpers/helper.js'
+    cases: {
+      module: ['../src/index.js', '.'],
+      direct: ['../assets/special/data.js', './special'],
+      helper: ['../helpers/helper.js', null]
     }
   },
   {
     description: 'module is in package root, but imports from a directory',
     entryPoint: 'index.test.js',
     options: {
-      module: 'index.js',
-      modulePaths: ['src/**/*.js'] // Test that module does not have to be in modulePaths
+      exports: {
+        node: {
+          '.': './index.js',
+          './src/*': './src/*'
+        }
+      }
     },
-    imports: {
-      module: './index',
-      direct: './src/module-file',
-      helper: './helpers/helper.js'
-    }
-  },
-  {
-    // This is the most convenient place to test this, even though these tests are about directory structure
-    description: 'test that modulePaths can be a glob string instead of Array',
-    entryPoint: 'index.test.js',
-    options: {
-      module: 'index.js',
-      modulePaths: 'src/**/*.js' // <-- testing this
-    },
-    imports: {
-      module: './index',
-      direct: './src/module-file',
-      helper: './helpers/helper.js'
+    cases: {
+      module: ['./index.js', '.'],
+      direct: ['./src/module-file.js', './src/module-file.js'],
+      helper: ['./helpers/helper.js', null]
     }
   }
 ]
 
 directoryStructureTestCases
   .forEach(structure => {
-    const { options, imports, entryPoint } = structure
+    const { options, cases, entryPoint } = structure
 
     // This is the options Object that will be used to initialize the plugin.
     // Id resolution test cases are defined in terms of this Object.
@@ -173,52 +228,57 @@ directoryStructureTestCases
     }
 
     // Importer parameter to plugin.resolveId can be null for a test case, so each test case
-    // has to choose the value it wants. // This is the value used in the common case
+    // has to choose the value it wants.
+    // This is the value used in the common case
     const importer = `${structureOptions.rootDir}/${entryPoint}`
 
     // Define the id resolution test cases in terms of structureOptions
     const idResolutionTestCases = [
       {
-        description: 'handles external packages',
+        description: 'id is external package',
         id: 'zora', // id provided to plugin.resolveId
         importer, // importer provided to plugin.resolveId
         expected: { id: 'zora', external: true } // expected output from plugin
       },
       {
-        description: 'id is entry point',
+        description: 'id is the module entry point',
         id: entryPoint,
         importer: undefined,
         expected: null
-      },
-      {
-        description: 'module import without extension',
-        id: imports.module,
-        importer,
-        expected: { id: structureOptions.packageName, external: true }
-      },
-      {
-        description: 'module import with extension',
-        id: `${imports.module}.js`,
-        importer,
-        expected: { id: structureOptions.packageName, external: true }
-      },
-      {
-        description: 'helper file import',
-        id: imports.helper,
-        importer,
-        expected: null
       }
-
     ]
 
-    if (imports.direct) {
-      const idPath = resolve(dirname(importer), imports.direct) // this is absolute path of id
-      const relativeIdPath = relative(structureOptions.rootDir, idPath) // this is relative to packageDir
+    if (cases.module) {
+      const [moduleUri, subPath] = cases.module
+      const moduleSpecifier = subPath.replace('.', structureOptions.packageName)
+      const testCase = {
+        description: 'direct import module',
+        id: moduleUri,
+        importer,
+        expected: { id: moduleSpecifier, external: true }
+      }
+      idResolutionTestCases.push(testCase)
+    }
+
+    if (cases.direct) {
+      const [moduleUri, subPath] = cases.direct
+      const moduleSpecifier = subPath.replace('.', structureOptions.packageName)
       const testCase = {
         description: 'direct import of file within module',
-        id: imports.direct,
+        id: moduleUri,
         importer,
-        expected: { id: `${structureOptions.packageName}/${relativeIdPath}`, external: true }
+        expected: { id: moduleSpecifier, external: true }
+      }
+      idResolutionTestCases.push(testCase)
+    }
+
+    if (cases.helper) {
+      const [moduleUri] = cases.helper
+      const testCase = {
+        description: 'direct import of unit test helper that is not part of module',
+        id: moduleUri,
+        importer,
+        expected: null
       }
       idResolutionTestCases.push(testCase)
     }

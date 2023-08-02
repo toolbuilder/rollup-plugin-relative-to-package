@@ -1,56 +1,38 @@
 import { promises } from 'fs'
 import { dirname, join, relative, resolve } from 'path'
-import picomatch from 'picomatch'
 import pkgDir from 'pkg-dir'
+import { ExportsResolver } from './exports-resolve.js'
+// export ExportsResolver from here to make CJS packaging easier
+export { ExportsResolver } from './exports-resolve.js'
 
-// Look for a field in package.json with the ES module path of the package
-// First match wins
-const getFirstModulePath = (mainFields, packageJson) => {
-  const paths = mainFields
-    .map(field => packageJson[field])
-    .filter(field => field != null)
-  return paths[0] // undefined is OK
-}
-
-const isModule = (id, module) => id === module
-const isPartOfModule = (id, moduleMatcher) => moduleMatcher(id)
-
-// Try id with each extension to see if fn matches one
-const matchWithExtensions = (id, extensions, fn) => {
-  for (const extension of extensions) {
-    if (fn(`${id}${extension}`)) return true
-  }
-  return false
-}
-
-export default (userOptions = {}) => {
+export const relativeToPackage = (userOptions = {}) => {
   const options = {
-    extensions: ['.mjs', '.js', '.json', '.node'], // Same as node-resolve
-    mainFields: ['browser', 'jsnext', 'module', 'main'], // Same as node-resolve
     rootDir: undefined, // defaults to first path where package.json is found using pkg-dir
-    module: undefined, // defaults to first package.json field (from mainFields) that returns a value
-    modulePaths: undefined, // defaults to options.module
     packageName: undefined, // will be read from package.json later if not provided
+    exports: undefined, // will be read from package.json later if not provided
+    conditions: ['default', 'import', 'node', 'node-addons'], // node's supported conditions
     ...userOptions
   }
-  let moduleMatcher // derived from modulePaths, used to determine whether an id is part of the package module
+  let resolver // will be initialized in buildStart when we have enough information, used in resolveId
+
   return {
     name: 'relative-to-package',
     async buildStart () {
       // Build up default option values now (rather than in factory function) because async calls are required
 
       options.rootDir = options.rootDir || await pkgDir()
-      const needPackageJson = options.module == null || options.packageName == null
+      const needPackageJson = options.exports == null || options.packageName == null
 
       if (needPackageJson) {
         const packageJsonPath = join(options.rootDir, 'package.json')
         const packageJson = JSON.parse(await promises.readFile(packageJsonPath, 'utf-8'))
 
-        options.module = options.module || getFirstModulePath(options.mainFields, packageJson)
+        options.exports = options.exports || packageJson.exports || packageJson.main
         options.packageName = options.packageName || packageJson.name
       }
-      options.modulePaths = options.modulePaths || options.module
-      moduleMatcher = picomatch(options.modulePaths)
+      const partialPackageJson = { name: options.packageName, exports: options.exports }
+      const resolverOptions = { environmentConditions: options.conditions }
+      resolver = new ExportsResolver(partialPackageJson, resolverOptions)
       return options // This is for testing - Rollup does not expect a return value
     },
 
@@ -63,19 +45,17 @@ export default (userOptions = {}) => {
 
       // Now we know id path is relative to importer. Need id path relative to rootDir
       const idPath = resolve(dirname(importer), id) // this is absolute path of id
-      const relativeIdPath = relative(options.rootDir, idPath) // this is relative to rootDir
+      const relativeIdPath = relative(options.rootDir, idPath)
+      // relativeIdPath is absolute as if rootDir is the filesystem root
+      // we need a path relative to rootDir, so prepend './'
+      const moduleUri = `./${relativeIdPath}`
 
-      const extensions = [''].concat(options.extensions) // add null extension in case id already has extension
+      // lookup module specifier (e.g. packageName/subPath) for moduleUri
+      const moduleSpecifier = resolver.resolveModuleSpecifier(moduleUri)
 
-      // Test if id is the module itself
-      if (matchWithExtensions(relativeIdPath, extensions, (testId) => isModule(testId, options.module))) {
-        return { id: options.packageName, external: true }
-      }
-
-      // Test if id is part of the module that is being imported directly
-      if (matchWithExtensions(relativeIdPath, extensions, (testId) => isPartOfModule(testId, moduleMatcher))) {
-        // This will be a funny looking import on Windows, since it will have back slashes too
-        return { id: `${options.packageName}/${relativeIdPath}`, external: true }
+      if (moduleSpecifier) {
+        // tell Rollup this is an external package, and how to import it (e.g. packageName/subPath)
+        return { id: moduleSpecifier, external: true }
       }
 
       // id isn't handled by this plugin - let Rollup handle it from here
@@ -83,3 +63,5 @@ export default (userOptions = {}) => {
     }
   }
 }
+
+export default relativeToPackage

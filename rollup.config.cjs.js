@@ -11,7 +11,7 @@ export default [
     output: {
       dir: 'cjs',
       format: 'cjs',
-      exports: 'auto'
+      exports: 'named'
     }
   }
 ]

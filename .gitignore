@@ -1,5 +1,6 @@
 node_modules/
 cjs/plugin.js
+cjs/exports-resolve.js
 *.tgz
 test-bundle.js
 published

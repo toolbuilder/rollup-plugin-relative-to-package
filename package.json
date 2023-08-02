@@ -5,10 +5,9 @@
   "keywords": [
     "rollup",
     "plugin",
-    "es2015",
-    "npm",
-    "modules",
-    "esm"
+    "packfile",
+    "dual-module",
+    "module"
   ],
   "homepage": "https://github.com/toolbuilder/rollup-plugin-relative-to-package#readme",
   "bugs": {
@@ -19,12 +18,12 @@
     "url": "https://github.com/toolbuilder/rollup-plugin-relative-to-package.git"
   },
   "license": "MIT",
-  "main": "./cjs/plugin.js",
+  "main": "./cjs/index.js",
   "module": "./src/plugin.js",
   "type": "module",
   "exports": {
     ".": {
-      "require": "./cjs/plugin.js",
+      "require": "./cjs/index.js",
       "default": "./src/plugin.js"
     }
   },
@@ -69,9 +68,6 @@
     "standard-version": "^9.5.0",
     "uncommitted": "^1.0.0",
     "zora": "^5.2.0"
-  },
-  "peerDependencies": {
-    "rollup": "^2.53.2"
   },
   "npmpackagejsonlint": {
     "extends": "@toolbuilder/package-json-lint-config"

@@ -1,6 +1,6 @@
 import createTestPackageJson from 'rollup-plugin-create-test-package-json'
 import multiInput from 'rollup-plugin-multi-input'
-import relativeToPackage from './src/plugin'
+import relativeToPackage from './src/plugin.js'
 import createPackFile from '@toolbuilder/rollup-plugin-create-pack-file'
 import runCommands, { shellCommand } from '@toolbuilder/rollup-plugin-commands'
 import { tmpdir } from 'os'
@@ -29,9 +29,10 @@ export default [
     },
     plugins: [
       multiInput(), // Handles the input glob above
-      relativeToPackage({ // This package converts relative imports to package imports
-        modulePaths: 'src/**/*.js'
-      }),
+      // Oddly enough, relativeToPackage isn't required to process the unit tests
+      // because they use self-referencing import statements. It does tell Rollup
+      // which files are external though.
+      relativeToPackage(),
       createTestPackageJson({ // Creates package.json for testPackageDir
         // Provide information that plugin can't pick up for itself
         testPackageJson: {

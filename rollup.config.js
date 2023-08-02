@@ -1,4 +1,4 @@
-import relativeToImport from './src/plugin.js'
+import relativeToImport from 'rollup-plugin-relative-to-package'
 /*
   This is a simple Rollup example configuration that converts the
   unit test 'test/plugin.test.js' from relative imports to package
