@@ -1,11 +1,15 @@
-import { promises } from 'fs'
-import { dirname, join, relative, resolve } from 'path'
+import { promises } from 'node:fs'
+import { join } from 'node:path'
 import pkgDir from 'pkg-dir'
+import { isModuleSpecifier } from './module-specifier.js'
+import { moduleUriResolver } from './module-uri-resolver.js'
 import { ExportsResolver } from './exports-resolve.js'
 // export ExportsResolver from here to make CJS packaging easier
 export { ExportsResolver } from './exports-resolve.js'
 
 export const relativeToPackage = (userOptions = {}) => {
+  // Final options and resolver are determined asynchronously,
+  // so they are uninitialized until buildStart is called
   const options = {
     rootDir: undefined, // defaults to first path where package.json is found using pkg-dir
     packageName: undefined, // will be read from package.json later if not provided
@@ -39,24 +43,15 @@ export const relativeToPackage = (userOptions = {}) => {
     async resolveId (id, importer) {
       // Test if id is entry point
       if (importer == null) return null
+      if (isModuleSpecifier(id)) return { id, external: true }
 
-      // Test if id is external package like 'lodash' or 'zora'
-      if (!id.startsWith('.')) return { id, external: true }
-
-      // Now we know id path is relative to importer. Need id path relative to rootDir
-      const idPath = resolve(dirname(importer), id) // this is absolute path of id
-      const relativeIdPath = relative(options.rootDir, idPath)
-      // relativeIdPath is absolute as if rootDir is the filesystem root
-      // we need a path relative to rootDir, so prepend './'
-      const moduleUri = `./${relativeIdPath}`
+      const moduleUri = moduleUriResolver(id, importer, options.rootDir)
 
       // lookup module specifier (e.g. packageName/subPath) for moduleUri
       const moduleSpecifier = resolver.resolveModuleSpecifier(moduleUri)
 
-      if (moduleSpecifier) {
-        // tell Rollup this is an external package, and how to import it (e.g. packageName/subPath)
-        return { id: moduleSpecifier, external: true }
-      }
+      // tell Rollup this is an external package, and how to import it (e.g. packageName/subPath)
+      if (moduleSpecifier) return { id: moduleSpecifier, external: true }
 
       // id isn't handled by this plugin - let Rollup handle it from here
       return null

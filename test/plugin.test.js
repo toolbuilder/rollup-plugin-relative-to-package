@@ -103,7 +103,7 @@ test('options.conditions defaults', async assert => {
 */
 const directoryStructureTestCases = [
   {
-    // test description for zora
+    // test description
     description: 'module is a single file',
     // unit test module location relative to package root
     entryPoint: 'test/index.test.js',
@@ -281,6 +281,13 @@ directoryStructureTestCases
         expected: null
       }
       idResolutionTestCases.push(testCase)
+      const testCase2 = {
+        description: 'full pathname import of unit test helper that is not part of module',
+        id: join(structureOptions.rootDir, moduleUri),
+        importer,
+        expected: null
+      }
+      idResolutionTestCases.push(testCase2)
     }
 
     test(structure.description, async assert => {

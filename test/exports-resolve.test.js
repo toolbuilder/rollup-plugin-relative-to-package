@@ -211,8 +211,8 @@ test('asterisk target pattern matching', assert => {
   const testCases = [
     [
       'more general target pattern first wins',
-      './src/features/y/y.js',
-      'asterisk/three/y/y'
+      './src/features/y/y.js', // relative path
+      'asterisk/three/y/y' // expected resolved external path
     ],
     [
       'general target pattern',

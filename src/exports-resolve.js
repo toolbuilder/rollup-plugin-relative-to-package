@@ -4,7 +4,8 @@ const isString = (item) => typeof item === 'string' || item instanceof String
  * @typedef {object} SubPathData - Provides data associated with a single export subpath.
  * @property {string} subPath - subPath from a single export key
  * @property {Set<string>} conditions - the set of conditions that must be satisfied for the
- * subPath to match an module specifier
+ * subPath to match a module specifier. These are the conditional export names in package.json
+ * that are ok to use for the target of this rollup invocation. See README.md 'conditions' option.
  * @property {string} targetPattern - the target pattern associated with the subPath
  */
 
@@ -195,7 +196,7 @@ const moduleUriLookup = (pkgName, lookupConditions, flattenedExports, moduleSpec
  */
 
 /**
- * Emulates the exports field module specifier lookup process, and also works in reverse.
+ * Emulates Node's package.json exports field module specifier lookup process, and also works in reverse.
  */
 export class ExportsResolver {
   /**

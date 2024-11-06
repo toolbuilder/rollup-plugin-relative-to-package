@@ -1,6 +1,8 @@
 # Rollup-Plugin-Relative-To-Package
 
-Converts unit tests that use relative imports to use package imports. Along the way, it calculates which files are `external` from Rollup's perspective. Therefore, the `external` field is not required in your configuration.
+Supports pack file testing by converting unit tests that use relative imports to use package imports where applicable. More technically, it converts moduleURIs to module specifiers when `package.json` provides a mapping in the `exports` declaration.
+
+When a module id is already a module specifier, or this plugin has converted a moduleURI to a module specifier, it tells Rollup that the id is external. As a result, the `external` field is not required in your configuration.
 
 NOTE: Since Node v13.6.0 and v12.16.0, Node supports 'self-referencing', where a module (e.g. a unit test), can import the package module using the package name instead of relative imports. In most (all?) cases, you should be using that feature instead of this plugin. This plugin only processes relative imports. Therefore, if you are using self-referencing imports, this plugin will not affect your Rollup builds.
 
@@ -20,6 +22,8 @@ import { internalFunction } from 'your-package-name/src/inside-your-package'
 /* Unit test code goes here */
 ```
 
+Your `package.json` export declarations, including any conditions defined in your rollup.js configuration, are used in the resolution process.
+
 ## Installation
 
 Using npm:
@@ -32,7 +36,7 @@ npm install --save-dev rollup-plugin-relative-to-package
 
 Version 1.0.0 makes breaking changes to this plugin.
 
-Options `extensions`, `module`, `mainFields`, and `modulePaths` are no longer supported. In their place are the `exports` and `conditions` fields. The `exports` field is the same as the `package.json` `exports` field, and `conditions` specifies what subPaths are valid.
+Options `extensions`, `module`, `mainFields`, and `modulePaths` are no longer supported. In their place are the `exports` and `conditions` fields. The `exports` field is the same as the `package.json` `exports` field, and `conditions` specifies what subPaths are valid exports.
 
 The simplest way to upgrade is to add an `exports` field in your `package.json`, and remove the existing options from your Rollup configuration. You may need to add the `conditions` field if you use special export conditions.
 
@@ -47,11 +51,12 @@ import relativeToPackage from 'rollup-plugin-relative-to-package'
 
 export default {
   // This is the entry point to your unit test - not your package!
-  // I use the 'multi-entry' plugin to process all unit tests at once.
+  // You could use globSync from the glob package (see `rollup.test.config.js`) or
+  // use `rollup-plugin-multi-input` to process all unit tests at once.
   input: 'test/unit-test.js',
   // relativeToPackage determines which packages are external, and
   // gives that information to Rollup. So there is no need to specify it.
-  // external: []
+  // external: (id) => !id.startsWith('.')
   output: {
     dir: 'output',
     format: 'es'
@@ -74,15 +79,6 @@ This [example Rollup configuration](./rollup.config.js) in the root of this repo
 ```bash
 pnpm install # I use pnpm. You can use npm and npx if you like
 pnpx rollup -c rollup.config.js # will produce test-bundle.js
-```
-
-The `check:packfile` script in [package.json](./package.json) uses this plugin to test the package. The configuration file for `check:packfile` is [rollup.test.config.js](./rollup.test.config.js). It requires [pnpm](https://pnpm.js.org/). Run the script like this:
-
-```bash
-# PNPM must be installed
-pnpm install
-pnpm run build
-pnpm run check:packfile
 ```
 
 ## Options
@@ -125,7 +121,7 @@ If you do not specify the `exports` or `packageName` options, this plugin needs 
 
 ## Alternatives
 
-I didn't find any. If you know of one, please point it out. Thanks!
+As mentioned above, use self-referencing imports on unit tests that test exported functionality. Other than that, I don't know of any alternatives.
 
 ## Contributing
 
